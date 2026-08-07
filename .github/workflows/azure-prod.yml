@@ -19,7 +19,7 @@ jobs:
     environment: production
     if: ${{ github.event.inputs.confirm == 'DEPLOY-PROD' }}
     env:
-      AZURE_CLIENT_ID: f88c1748-5134-411b-ac57-ae7d35d6caf7
+      AZURE_CLIENT_ID: 8e799bb0-f7c2-4ddd-8112-b76e46ed0f71
       AZURE_TENANT_ID: 6f505c60-feb6-4721-9d89-9c8432d36322
       AZURE_SUBSCRIPTION_ID: e0586e3f-8d3f-442e-b823-99868c0ea14c
       AZURE_STATIC_WEB_APP_NAME: homedaycare-web
