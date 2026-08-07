@@ -1,0 +1,118 @@
+name: Docker dev image
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_note:
+        description: 'Manual Docker dev image build/publish run'
+        required: false
+        default: 'manual dev image'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-test-publish-dev:
+    runs-on: ubuntu-latest
+    name: Build, smoke-test, and publish homedaycare-web dev image
+    environment: dev
+    env:
+      AZURE_CLIENT_ID: f88c1748-5134-411b-ac57-ae7d35d6caf7
+      AZURE_TENANT_ID: 6f505c60-feb6-4721-9d89-9c8432d36322
+      AZURE_SUBSCRIPTION_ID: e0586e3f-8d3f-442e-b823-99868c0ea14c
+      AZURE_KEY_VAULT_NAME: deniskachar-ci-kv
+      DOCKER_IMAGE: snkd92/homedaycare-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shared web root
+        run: |
+          set -euo pipefail
+          test -f web/index.html
+          test -s web/styles.css
+          test -s web/app.js
+          test -s web/health.json
+          test -s web/staticwebapp.config.json
+          test -f Dockerfile
+          test -f nginx.conf
+          python3 -m json.tool web/staticwebapp.config.json >/dev/null
+          grep -q "children from 1 to 3 years old" web/index.html
+          grep -q "Meals 1–3 times a day" web/index.html
+          grep -q "HOMEDAYCARE_WEB" web/app.js
+
+      - name: Azure login with repository-scoped OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Read Docker Hub credentials from Azure Key Vault
+        id: dockerhub
+        shell: bash
+        run: |
+          set -euo pipefail
+          username="$(az keyvault secret show --vault-name "$AZURE_KEY_VAULT_NAME" --name dockerhub-username --query value -o tsv)"
+          token="$(az keyvault secret show --vault-name "$AZURE_KEY_VAULT_NAME" --name dockerhub-token --query value -o tsv)"
+          if [ -z "$username" ] || [ -z "$token" ]; then
+            echo "Docker Hub credentials are missing from Azure Key Vault $AZURE_KEY_VAULT_NAME." >&2
+            exit 1
+          fi
+          echo "::add-mask::$username"
+          echo "::add-mask::$token"
+          {
+            echo "username=$username"
+            echo "token=$token"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU for multi-platform builds
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for smoke test from shared web root
+        run: docker build -t homedaycare-web:smoke .
+
+      - name: Container smoke test
+        run: |
+          set -euo pipefail
+          docker run -d --name homedaycare-web-smoke -p 8080:80 homedaycare-web:smoke
+          cleanup() { docker rm -f homedaycare-web-smoke >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8080/health.json >/dev/null; then break; fi
+            if [ "$i" = 20 ]; then docker logs homedaycare-web-smoke; exit 1; fi
+            sleep 1
+          done
+          for route in /health.json / /styles.css /app.js; do
+            curl -fsS "http://localhost:8080${route}" >/dev/null
+            echo "ok ${route}"
+          done
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ steps.dockerhub.outputs.username }}
+          password: ${{ steps.dockerhub.outputs.token }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=dev
+            type=raw,value=main
+            type=ref,event=tag
+
+      - name: Build and push image from shared web root
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

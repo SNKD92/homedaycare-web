@@ -1,0 +1,74 @@
+name: Azure production deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY-PROD to deploy homedaycare-web to Azure Static Web Apps'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    name: Deploy homedaycare-web production
+    environment: production
+    if: ${{ github.event.inputs.confirm == 'DEPLOY-PROD' }}
+    env:
+      AZURE_CLIENT_ID: f88c1748-5134-411b-ac57-ae7d35d6caf7
+      AZURE_TENANT_ID: 6f505c60-feb6-4721-9d89-9c8432d36322
+      AZURE_SUBSCRIPTION_ID: e0586e3f-8d3f-442e-b823-99868c0ea14c
+      AZURE_STATIC_WEB_APP_NAME: homedaycare-web
+      AZURE_STATIC_WEB_APP_RESOURCE_GROUP: homedaycare-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shared web root
+        run: |
+          set -euo pipefail
+          test -f web/index.html
+          test -s web/styles.css
+          test -s web/app.js
+          test -s web/health.json
+          test -s web/staticwebapp.config.json
+          test -f Dockerfile
+          test -f nginx.conf
+          python3 -m json.tool web/staticwebapp.config.json >/dev/null
+          grep -q "children from 1 to 3 years old" web/index.html
+          grep -q "Meals 1–3 times a day" web/index.html
+          grep -q "HOMEDAYCARE_WEB" web/app.js
+
+      - name: Azure login with repository-scoped OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Read Azure Static Web Apps deployment token
+        id: swa
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(az staticwebapp secrets list --name "$AZURE_STATIC_WEB_APP_NAME" --resource-group "$AZURE_STATIC_WEB_APP_RESOURCE_GROUP" --query 'properties.apiKey' -o tsv)"
+          if [ -z "$token" ]; then
+            echo "Azure Static Web Apps deployment token was empty for $AZURE_STATIC_WEB_APP_NAME." >&2
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy shared web root to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa.outputs.token }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: web
+          api_location: ''
+          output_location: ''
+          skip_app_build: true
