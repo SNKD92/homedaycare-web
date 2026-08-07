@@ -8,12 +8,10 @@ const CONTACT_EMAIL = 'hello@example.com';
 function buildInquiry() {
   const parent = document.getElementById('parentName')?.value.trim() || 'Parent';
   const age = document.getElementById('childAge')?.value || 'not selected';
-  const meals = document.getElementById('mealsNeeded')?.value || 'not sure yet';
   const notes = document.getElementById('careNotes')?.value.trim() || 'No extra notes yet.';
   return `Home daycare inquiry
 Parent: ${parent}
 Child age: ${age}
-Meals needed: ${meals}
 Notes: ${notes}`;
 }
 
