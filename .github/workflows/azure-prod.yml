@@ -38,9 +38,10 @@ jobs:
           test -f Dockerfile
           test -f nginx.conf
           python3 -m json.tool web/staticwebapp.config.json >/dev/null
-          grep -q "children from 1 to 3 years old" web/index.html
+          grep -q "children from 1 to 4 years old" web/index.html
           grep -q "Meals 1–3 times a day" web/index.html
-          grep -q "HOMEDAYCARE_WEB" web/app.js
+          grep -q "Contact form" web/index.html
+          grep -q "buildInquiry" web/app.js
 
       - name: Azure login with repository-scoped OIDC
         uses: azure/login@v2

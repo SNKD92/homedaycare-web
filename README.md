@@ -1,6 +1,6 @@
 # homedaycare-web
 
-Static visit-card website for a home daycare service. It promotes care for children ages 1–3, meals 1–3 times per day, music teacher activities, painting/creative play, and an 8 AM–5 PM care window.
+Static visit-card website for a home daycare service. It promotes care for children ages 1–4, meals 1–3 times per day, music teacher activities, painting/creative play, and an 8 AM–5 PM care window.
 
 ## Runtime contract
 
