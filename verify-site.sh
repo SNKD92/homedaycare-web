@@ -21,12 +21,14 @@ require / 'Painting and creativity'
 require / 'Contact form'
 require / 'parentName'
 require / 'childAge'
-require / 'healthy-meals.svg'
-require / 'music-paint.svg'
-require / 'playroom.svg'
+require / 'healthy-meals.webp'
+require / 'music-paint.webp'
+require / 'playroom.webp'
 require /styles.css 'picture-grid'
 require /app.js 'buildInquiry'
-require /assets/playroom.svg '<svg'
-require /assets/music-paint.svg '<svg'
-require /assets/healthy-meals.svg '<svg'
+require / 'quiet-play.webp'
+for asset in playroom healthy-meals music-paint quiet-play; do
+  curl -fsS "${BASE_URL}/assets/${asset}.webp" -o /dev/null
+  echo "ok /assets/${asset}.webp"
+done
 echo "Verification passed for ${BASE_URL}"
